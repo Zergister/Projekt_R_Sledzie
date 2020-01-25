@@ -2,11 +2,18 @@
 title: "Programowanie w R: Projekt"
 author: "Michał Fert"
 date: '`r format(Sys.Date(), "%d %b %Y")`'
-output: 
+always_allow_html: yes
+output:
+  md_document:
+    toc: yes
+    toc_depth: 2
+    variant: markdown_github
   html_document:
-    keep_md: yes
-    toc: true
-    toc_float: true
+    depth: 2
+    highlight: tango
+    number_sections: yes
+    theme: united
+    toc: yes
   
 ---
 
