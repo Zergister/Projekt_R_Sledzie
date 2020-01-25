@@ -1,0 +1,225 @@
+---
+title: "Programowanie w R: Projekt"
+author: "Michał Fert"
+date: '`r format(Sys.Date(), "%d %b %Y")`'
+output: 
+  html_document:
+    keep_md: yes
+    toc: true
+    toc_float: true
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Cel projektu
+
+Celem projektu jest przygotowanie i analiza danych, a także zbudowanie modelu w celu określenia przyczyn zmniejszającej się wielkości śledzi.
+
+# Przygotowanie danych
+## Wykorzystane biblioteki
+```{r loading_lib, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(caret)
+library(corrplot)
+```
+
+## Zapewnienie powtarzalności
+Powtarzalność uzyskana została poprzez ustawienie ziarna na stałą wartość 1.
+```{r set_seed}
+set.seed(1)
+```
+
+## Ładowanie danych
+Dane źródłowe są pobierane z adresu "http://www.cs.put.poznan.pl/dbrzezinski/teaching/sphd/sledzie.csv".  
+Dodatkowo znak "?" jest automatycznie podmieniany na "NA".  
+```{r load_csv, cache=TRUE}
+df <- read.csv("http://www.cs.put.poznan.pl/dbrzezinski/teaching/sphd/sledzie.csv", na = c("?", "NA"))
+```
+Wczytany zbiór ma `r nrow(df)` wierszy.  
+Z czego część wykazuje brakujące wartości.  
+```{r data_sample, cache=TRUE, echo=FALSE}
+head(df)
+```
+W celu oczyszczenia zbioru wykonywane jest usunięcie wybrakowanych wierszy.
+```{r clean_missing, cache=TRUE}
+df <- na.omit(df)
+```
+W efekcie zbiór maleje do `r nrow(df)` wierszy.
+```{r clean_sample, echo=FALSE}
+head(df)
+```
+
+## Interaktywny wykres długości śledzi w czasie
+Poniższy wykres przedstawia zmiany w długości śledzi (lenght) w czasie, w tym przypadku prezentowanym przez kolejne pomiary (X).  
+Jest to możliwe, ponieważ pomiary były dodawane w porządku chronologicznym.
+```{r interactive_plot, echo=FALSE, message=FALSE}
+p <- ggplot(data = df, aes(x = X, y = length)) +
+  geom_point() + ggtitle("Długość śledzi w kolejnych pomiarach") + xlab("Numer pomiaru") + ylab("Długość śledzia [cm]") + geom_smooth()
+ggplotly(p)
+```
+
+# Analiza atrybutów
+## Znaczenie atrybutów
+Znaczenie kolumn w pliku:  
+-length: długość złowionego śledzia [cm];  
+-cfin1: dostępność planktonu [zagęszczenie Calanus finmarchicus gat. 1];  
+-cfin2: dostępność planktonu [zagęszczenie Calanus finmarchicus gat. 2];  
+-chel1: dostępność planktonu [zagęszczenie Calanus helgolandicus gat. 1];  
+-chel2: dostępność planktonu [zagęszczenie Calanus helgolandicus gat. 2];  
+-lcop1: dostępność planktonu [zagęszczenie widłonogów gat. 1];  
+-lcop2: dostępność planktonu [zagęszczenie widłonogów gat. 2];  
+-fbar: natężenie połowów w regionie [ułamek pozostawionego narybku];  
+-recr: roczny narybek [liczba śledzi];  
+-cumf: łączne roczne natężenie połowów w regionie [ułamek pozostawionego narybku];  
+-totaln: łączna liczba ryb złowionych w ramach połowu [liczba śledzi];  
+-sst: temperatura przy powierzchni wody [°C];  
+-sal: poziom zasolenia wody [Knudsen ppt];  
+-xmonth: miesiąc połowu [numer miesiąca];  
+-nao: oscylacja północnoatlantycka [mb].  
+
+## Statystyki atrybutów
+```{r data_summary, echo=FALSE}
+summary(df)
+```
+
+## Rozkłady atrybutów
+```{r attrAnalysis, echo=FALSE}
+hist(df$length, main="Histogram atrybutu length", xlab="Długość złowionego śledzia [cm]")
+hist(df$cfin1, main="Histogram atrybutu cfin1", xlab="Dostępność planktonu CF1 [zagęszczenie]")
+hist(df$cfin2, main="Histogram atrybutu cfin2", xlab="Dostępność planktonu CF2 [zagęszczenie]")
+hist(df$chel1, main="Histogram atrybutu chel1", xlab="Dostępność planktonu CH1 [zagęszczenie]")
+hist(df$chel2, main="Histogram atrybutu chel2", xlab="Dostępność planktonu CH2 [zagęszczenie]")
+hist(df$lcop1, main="Histogram atrybutu lcop1", xlab="Dostępność widłonogów gat.1 [zagęszczenie]")
+hist(df$lcop2, main="Histogram atrybutu lcop2", xlab="Dostępność widłonogów gat.2 [zagęszczenie]")
+hist(df$fbar, main="Histogram atrybutu fbar", xlab="Natężenie połowów w regionie [ułamek pozostawione narybku]")
+hist(df$recr, main="Histogram atrybutu recr", xlab="Roczny narybek [liczba śledzi]")
+hist(df$cumf, main="Histogram atrybutu cumf", xlab="Łączne roczne natężenie połowów w regionie [ułamek pozostawione narybku]")
+hist(df$totaln, main="Histogram atrybutu totaln", xlab="Łączna liczba ryb złowionych w ramach połowu [liczba śledzi]")
+hist(df$sst, main="Histogram atrybutu sst", xlab="Temperatura przy powierzchni wody [°C]")
+hist(df$sal, main="Histogram atrybutu sal", xlab="Poziom zasolenia wody [Knudsen ppt]")
+hist(df$xmonth, main="Histogram atrybutu xmonth", xlab="Miesiąc połowu [numer miesiąca]]")
+hist(df$nao, main="Histogram atrybutu nao", xlab="Oscylacja północnoatlantycka [mb]")
+```
+
+## Korelacje atrubutów
+```{r correlation, echo=FALSE}
+corrs <- cor(data.matrix(df))
+
+cex.before <- par("cex")
+par(cex = 0.7)
+corrplot(corrs[-1,-1],  method = "color",
+    addCoef.col="black", tl.col="black",
+    order = "hclust", tl.cex = 1/par("cex"),
+    cl.cex = 1/par("cex"), type="upper")
+par(cex = cex.before)
+```
+  
+Na podstawie powyższego wykresu korelacji można dojść do następujących wniosków:  
+1 Atrybuty odpowiadające za liczebność planktonu i widłogonów są dość mocno między sobą skorelowane  
+  1.1 chel1 z lcop1 - 0.96  
+  1.2 chel2 z lcop2 - 0.89  
+  1.3 cfin2 z lcop2 - 0.65  
+2 Atrybuty związane z kwotami połowów są ze sobą mocno skorelowane  
+  2.1 cumf z totaln - -0.71  
+  2.2 cumf z fbar - 0.82  
+  2.3 fbar z totaln - -0.51  
+W oparciu o te wnioski zapadła decyzja o usunięciu silnie skorelowanych między sobą parametrów tak, żeby nie zakłócały dalszych opearcji na danych. Usunięte zostały:  
+- chel1 (mniejsza korelacja z lenght niż lcop1)  
+- lcop2  
+- cumf  
+- totln  
+
+```{r correlation_after_clear, echo=FALSE}
+corrs <- cor(data.matrix(df))
+
+cex.before <- par("cex")
+par(cex = 0.7)
+corrplot(corrs[-1,-1],  method = "color",
+    addCoef.col="black", tl.col="black",
+    order = "hclust", tl.cex = 1/par("cex"),
+    cl.cex = 1/par("cex"), type="upper")
+par(cex = cex.before)
+```
+  
+Bazując na nowym wykresie korelacji zostali wybrani kandydaci do regresji:  
+-lcop1  
+-cfin1  
+-chel2  
+-sst  
+-nao  
+-fbar  
+
+# Regresja
+## Zbiory treningowy i testowy
+Zakres danych został podzielony na zbiór treningowy (20%) i testowy (80%).  
+Do trenowania została użyta 5-krotna walidacja krzyżowa.
+``` {r train_test_set}
+in_training <- createDataPartition(y=df$length, p=0.8, list = FALSE)
+in_test <- -in_training
+
+train_set <- df[in_training,]
+test_set <- df[-in_training,]
+
+tc <- trainControl(method='repeatedcv', number=2, repeats=5)
+```
+## Regresja liniowa
+Pierwsze podejście polegało na wyuczeniu modelu przy użyciu wszystkich atrybutów.
+``` {r linear_regresion, cache=TRUE}
+linear_regresion <- train(length ~ ., data=train_set, method="lm", preProcess = c('scale', 'center'), trControl=tc)
+```
+Wyniki nie były szczególnie dobre. Należy jednak wziąć pod uwagę poziom skomplikowania zagadnienia.
+```{r lm_stats}
+predicted <- predict(linear_regresion, train_set)
+postResample(predicted, df[in_training, 2])
+```
+Jako najważniejsze atrybuty zostały wskazane kwoty połowów co miałoby pokrycie w rzeczywistości.
+```{r lm_var}
+varImp(linear_regresion)
+```
+Drugie podejśćie do regresji liniowej obejmowało użycie atrybutów wytypowanych przy sprawdzaniu korelacji.
+``` {r linear_regresion2, cache=TRUE}
+linear_regresion <- train(length ~ lcop1 + cfin1 + chel2 + sst + nao + fbar, data=train_set, method="lm", preProcess = c('scale', 'center'), trControl=tc)
+```
+Efekt był zaskakujący, okazało się że wyniki się pogorszyły.
+```{r lm_stats2}
+predicted <- predict(linear_regresion, train_set)
+postResample(predicted, df[in_training, 2])
+```
+Najważniejszym atrybutem okazała się temperatura wody przy powierzchni, a za raz po niej ponownie kwota połowów.
+```{r lm_var2}
+varImp(linear_regresion)
+```
+## Random forest
+Następnym algorytmem został Random Forest. Pierwsza próba ponownie została wykonana przy użyciu wszystkich atrybutów.
+``` {r random_forest, cache=TRUE}
+random_forest <- train(length ~ ., data=train_set, method="rf", trControl=tc, ntree = 10)
+```
+Wynik był dużo lepszy niż w regresji liniowej.
+```{r rf_stats}
+predicted <- predict(random_forest, train_set)
+postResample(predicted, df[in_training, 2])
+```
+Co interesujące Random Forest już przy pierwszej próbie wskazał temperaturę wody za główny czynnik, kwoty połowów dopiero jako czwarty.
+```{r rf_var}
+varImp(random_forest)
+```
+Tak samo jak przy regresji została wykonana druga próba. Ponownie zostały użyte parametry o wysokiej korelacji.
+``` {r random_forest2, cache=TRUE}
+random_forest2 <- train(length ~ lcop1 + cfin1 + chel2 + sst + nao + fbar, data=train_set, method="rf", trControl=tc, ntree = 10)
+```
+I ponownie okazało się, że spowodowały one gorsze wyniki.
+```{r rf_stats2}
+predicted <- predict(random_forest2, train_set)
+postResample(predicted, df[in_training, 2])
+```
+Bez zmian natomiast pozostała ważność temperatury wody.
+```{r rf_var2}
+varImp(random_forest2)
+```
+# Podsumowanie
+W efekcie przprowadzonych powyżej działań doszedłem do wniosku, że na zmniejszającą się długość śledzia największy wpływ ma temperatura wody przy powierzchni (rosnąca wraz z coraz silniejszym efektem cieplarnianym) i ilości wyławianych ryb (najprawdopodobnie zbyt duże by pozwolić się odtworzyć populacji dorołych osobników). 
